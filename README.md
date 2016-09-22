@@ -6,7 +6,7 @@ ck.c enumerates all k-cliques.
 
 ckcore.c compute a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
 
-Both programs scale to real-world networks containing several billions of edges.
+Both programs scale to real-world networks containing several billions of edges.  
 For instance Friendster (http://snap.stanford.edu/data/com-Friendster.html) has exactly 487,090,833,092,739 10-cliques, that is a bit less than 0.5 quadrillions 10-cliques. 
 
 
@@ -19,6 +19,7 @@ gcc ckcore.c -O3 -o ckcore
 gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 
 ##To execute##
+
 ./ck p k edgelist.txt
 
 - p is the number of processors to use.
@@ -42,10 +43,7 @@ gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 
 ##Initial contributors##
 
-Maximilien Danisch, Qinna Wang, Oana Balalau and Mauro Sozio
-
-January 2016
-
-http://bit.ly/maxdan94
-
+Maximilien Danisch, Qinna Wang, Oana Balalau and Mauro Sozio  
+January 2016  
+http://bit.ly/maxdan94  
 maximilien.danisch@telecom-paristech.fr

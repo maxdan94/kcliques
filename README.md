@@ -3,7 +3,7 @@
 ##Info##
 
 ck.c enumerates all k-cliques.  
-ckcore.c compute a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
+ckcore.c computes a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
 
 Both programs scale to real-world networks containing several billions of edges.  
 For instance:  

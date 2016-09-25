@@ -6,8 +6,9 @@ ck.c enumerates all k-cliques.
 ckcore.c compute a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
 
 Both programs scale to real-world networks containing several billions of edges.  
-For instance Friendster (http://snap.stanford.edu/data/com-Friendster.html) has exactly 487,090,833,092,739 10-cliques, that is a bit less than 0.5 quadrillions 10-cliques. 
-
+For instance:  
+- Friendster (http://snap.stanford.edu/data/com-Friendster.html) has exactly 487,090,833,092,739 10-cliques, that is a bit less than 0.5 quadrillions 10-cliques. 
+- Twitter (https://an.kaist.ac.kr/traces/WWW2010.html) has exactly 3,388,795,307,518,264 5-cliques, that is a bit more than 3 quadrillions 5-cliques.
 
 ##To compile##
 

@@ -16,7 +16,7 @@ k of k-clique to enumerate.
 "edgelist.txt" should contain the graph: one edge on each line separated by a space.
 Will print the total number of k-cliques.
 Will print the k-clique core number of the graph
-Will print the k-clique density, the edge density and the size of the densest subgraph
+Will print the k-clique density, the edge density and the size of the found 1/k-approximation densest subgraph
 Will write in ckdeg.txt the ID of each node followed by its k-clique degree
 Will write in ckcore.txt the ID of each node followed by its k-clique core number in a k-clique core ordering
 Will write in ckdens.txt the the k-clique density, the edge density and the size of the densest subgraph followed by the ID of each node in it

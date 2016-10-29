@@ -20,7 +20,7 @@ gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 
 ./ck p k edgelist.txt
 
-- p is the number of processors to use.
+- p is the number of threads to use.
 - k of k-clique to enumerate.
 - "edgelist.txt" should contain the graph: one edge on each line separated by a space.
 - Will print the number of l-cliques for l in [1,k].
@@ -28,7 +28,7 @@ gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 ./ckcore k edgelist.txt ckdeg.txt ckcore.txt ckdens.txt  
 ./ckcorepar p k edgelist.txt ckdeg.txt ckcore.txt ckdens.txt
 
-- p is the number of processors to use.
+- p is the number of threads to use.
 - k of k-clique to enumerate.
 - "edgelist.txt" should contain the graph: one edge on each line separated by a space.
 - Will print the total number of k-cliques.

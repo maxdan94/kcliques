@@ -2,9 +2,9 @@
 
 ##Info##
 
-ck.c counts all k-cliques.  
-cklist.c list all k-cliques and write them in a file (note that as the number of k-cliques can be extremly large and thus it can use a lot of disk storage).  
-ckcore.c computes a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
+- ck.c counts all k-cliques in parallel.  
+- cklist.c list all k-cliques and write them in a file (note that as the number of k-cliques can be extremly large and thus it can use a lot of disk storage).  
+- ckcore.c computes a k-clique core decomosition of the graph. ckcorepar.c is a parallel version of the same code.
 
 Both programs scale to real-world networks containing several billions of edges.  
 For instance:  

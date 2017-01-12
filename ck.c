@@ -201,11 +201,6 @@ void mkgraph(sparse *g){
 		g->adj0[ g->cd0[g->edges[i].t] + g->d0[ g->edges[i].t ]++ ]=g->edges[i].s;
 	}
 
-	#pragma omp parallel for schedule(dynamic, 1) private(i)
-	for (i=0;i<g->n;i++) {
-		qsort(&g->adj0[g->cd0[i]],g->d0[i],sizeof(unsigned),cmpfunc);
-	}
-
 }
 
 //Building the heap structure with (key,value)=(node,degree) for each node
@@ -266,13 +261,17 @@ void mkspecial(sparse *g){
 			}
 		}
 	}
+	#pragma omp parallel for schedule(dynamic, 1) private(i)
+	for (i=0;i<g->n;i++) {
+		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
+	}
+	free(g->d0);
+	free(g->cd0);
+	free(g->adj0);
 }
 
 void freesparse(sparse *g){
 	free(g->edges);
-	free(g->d0);
-	free(g->cd0);
-	free(g->adj0);
 	free(g->rank);
 	free(g->d);
 	free(g->cd);

@@ -31,6 +31,7 @@ gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 
 - "k" of k-clique to enumerate.
 - "edgelist.txt" should contain the graph: one edge on each line separated by a space.
+- Will print the total number of k-cliques.
 - "kcliques.txt" will contain the k-cliques (one k-clique on each line that is k unsigned ints on each line).
 
 ./ckcore k edgelist.txt ckdeg.txt ckcore.txt ckdens.txt  

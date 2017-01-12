@@ -4,7 +4,7 @@
 
 - ck.c counts all k-cliques in parallel.  
 - cklist.c lists all k-cliques and write them in a file, note that the number of k-cliques can be extremly large and thus it can use a lot of disk storage.  
-- ckdeg.c computes the k-clique degree (that is the number of k-cliques the node belongs to) of each node in the graph in parallel.
+- ckdeg.c computes the k-clique degree (that is the number of k-cliques a node belongs to) of each node in the graph in parallel.
 - ckcore.c computes a k-clique core decomosition (that is the core decomposition using k-clique degree instead of degree in the definition) of the graph. ckcorepar.c is a parallel version of the same code.
 
 ck.c, ckdeg.c and ckcore.c scale to real-world networks containing several billions of edges.  

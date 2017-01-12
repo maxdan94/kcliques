@@ -24,6 +24,7 @@ parallelisation over edges and increasing core ordering
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
+#include <time.h>
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
 
@@ -362,8 +363,17 @@ int main(int argc,char** argv){
 	unsigned long long *nck;
 	omp_set_num_threads(atoi(argv[1]));
 
+	time_t t0,t1,t2;
+	t1=time(NULL);
+	t0=t1;
+
 	printf("Reading edgelist from file %s\n",argv[3]);
 	g=readedgelist(argv[3]);
+
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+
 	printf("Number of nodes = %u\n",g->n);
 	printf("Number of edges = %u\n",g->e);
 	printf("Building the graph structure\n");
@@ -372,11 +382,22 @@ int main(int argc,char** argv){
 	kcore(g);
 	printf("Core number = %u\n",g->core);
 	mkspecial(g);
+
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+
 	printf("Enumerating all %u-cliques\n",kmax);
 	nck=onepass(g,kmax);
 	for(i=0;i<kmax;i++){
 		printf("Number of %u-cliques: %llu\n",i+1,nck[i]);
 	}
 	freesparse(g);
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+
+	printf("- Overall time = %ldh%ldm%lds\n",(t2-t0)/3600,((t2-t0)%3600)/60,((t2-t0)%60));
+
 	return 0;
 }

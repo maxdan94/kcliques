@@ -5,17 +5,18 @@ http://bit.ly/maxdan94
 maximilien.danisch@telecom-paristech.fr
 
 Info:
-Feel free to use these lines as you wish. This program enumerate all k-cliques.
+Feel free to use these lines as you wish. This program computes the k-clique degrees of each node in the graph (that is the number of k-cliques the node belongs to).
 
 To compile:
-"gcc ck.c -O9 -o ck -fopenmp".
+"gcc ckdeg.c -O9 -o ckdeg -fopenmp".
 
 To execute:
-"./ck p k edgelist.txt".
+"./ckdeg p k edgelist.txt kdeg.txt".
 p is the number of processors to use.
 k of k-clique to enumerate.
 "edgelist.txt" should contain the graph: one edge on each line separated by a space.
-Will print the number of l-cliques for l in [1,k].
+Will print the total number of k-cliques.
+"kdeg.txt" will contain the k-clique degrees (node ID followed and its k-clique degree separated by a space on each line).
 
 Note:
 parallelisation over edges and increasing core ordering

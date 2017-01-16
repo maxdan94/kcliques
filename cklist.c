@@ -303,11 +303,12 @@ void mkspecial(sparse *g){
 		g->adj[g->cd[g->edges[i].s] + g->d[ g->edges[i].s ]++ ]=g->edges[i].t;
 	}
 
+	free(g->edges); //Can be freed if node parallelisation is used instead of edge
+
 	for (i=0;i<g->n2;i++) {
 		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
 	}
 
-	//free(g->edges); Can be freed if node parallelisation is used instead of edge
 }
 
 void freesparse(sparse *g){

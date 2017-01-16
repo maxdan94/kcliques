@@ -231,7 +231,7 @@ void kcore(sparse* g){
 		if (kv.value>c){
 			c=kv.value;
 		}
-		if (c<2){
+		if (c<2){//remove node with core value less than 2
 			g->rank[kv.key]=-1;
 			n--;
 		}
@@ -376,7 +376,7 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 		return;
 	}
 
-	for(i=2; i<size[k-3]; i++){//Astuce: when i=0 or 1; no adjacent node in merge;
+	for(i=1; i<size[k-3]; i++){
 		u=merge[t+i];
 		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],size[k-3],&merge[t2]);
 		nck[k]+=size[k-2];

@@ -231,13 +231,13 @@ void kcore(sparse* g,unsigned kmax){
 		if (kv.value>c){
 			c=kv.value;
 		}
-		if (c<k){
+		if (c<k){//remove node with core value less than kmax-1
 			g->rank[kv.key]=-1;
 			n--;
 		}
 		else{
-			g->map[n-r]=kv.key;
-			g->rank[kv.key]=n-(++r);
+			g->map[n-(++r)]=kv.key;
+			g->rank[kv.key]=n-r;
 		}
 		for (j=g->cd0[kv.key];j<g->cd0[kv.key+1];j++){
 			update(heap,g->adj0[j]);
@@ -312,7 +312,6 @@ void mkspecial(sparse *g){
 }
 
 void freesparse(sparse *g){
-	free(g->edges);
 	free(g->rank);
 	free(g->map);
 	free(g->d);

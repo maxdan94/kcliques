@@ -8,7 +8,7 @@ Info:
 Feel free to use these lines as you wish. This program enumerates all k-cliques, computes the k-clique core decomposition and computes a k approximation of a k-cliques densest subgraph.
 
 To compile:
-"gcc ckcore_par.c -O9 -o ckcore -fopenmp".
+"gcc ckcorepar.c -O9 -o ckcore -fopenmp".
 
 To execute:
 "./ckcore_par p k edgelist.txt ckdeg.txt ckcore.txt ckdens.txt".
@@ -125,21 +125,25 @@ typedef struct {
 } edge;
 
 typedef struct {
+	//edge list structure:
 	unsigned n; //number of nodes
 	unsigned e; //number of edges
+	unsigned n2; //number of nodes with core value larger than one
+	unsigned e2; //number of edges between nodes with core value larger than one
 	edge *edges;//list of edges
 
+	//to compute a degeneracy ordering:
 	unsigned *d0; //degrees
 	unsigned *cd0; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj0; //list of neighbors
-
 	unsigned *rank; //degeneracy rankings of nodes
+	unsigned *map;//map[newlabel]=oldlabel
+	unsigned core; //core number of the graph
 
+	//truncated neighborhoods:
 	unsigned *d; //truncated degrees
 	unsigned *cd; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj; //list of neighbors with higher rank
-
-	unsigned core; //core number of the graph
 } sparse;
 
 
@@ -174,13 +178,6 @@ sparse* readedgelist(char* edgelist){
 	return g;
 }
 
-//used in qsort
-int cmpfunc (const void * a, const void * b){
-	if (*(unsigned*)a>*(unsigned*)b){
-		return 1;
-	}
-	return -1;
-}
 
 //Building the graph structure
 void mkgraph(sparse *g){
@@ -205,10 +202,6 @@ void mkgraph(sparse *g){
 		g->adj0[ g->cd0[g->edges[i].t] + g->d0[ g->edges[i].t ]++ ]=g->edges[i].s;
 	}
 
-	for (i=0;i<g->n;i++) {
-		qsort(&g->adj0[g->cd0[i]],g->d0[i],sizeof(unsigned),cmpfunc);
-	}
-
 }
 
 //Building the heap structure with (key,value)=(node,degree) for each node
@@ -231,55 +224,109 @@ void freeheap(bheap *heap){
 }
 
 //computing degeneracy ordering and core value
-void kcore(sparse* g){
-	unsigned i,j;
+void kcore(sparse* g,unsigned kmax){
+	unsigned i,j,r=0,n=g->n,k=kmax-1;
 	keyvalue kv;
 	unsigned c=0;//the core number
 	bheap *heap=mkheap(g);
 	g->rank=malloc(g->n*sizeof(unsigned));
-
+	g->map=malloc(g->n*sizeof(unsigned));
 	for (i=0;i<g->n;i++){
 		kv=popmin(heap);
-		g->rank[kv.key]=i;
 		if (kv.value>c){
 			c=kv.value;
+		}
+		if (c<k){//remove node with core value less than kmax-1
+			g->rank[kv.key]=-1;
+			n--;
+		}
+		else{
+			g->map[n-(++r)]=kv.key;
+			g->rank[kv.key]=n-r;
 		}
 		for (j=g->cd0[kv.key];j<g->cd0[kv.key+1];j++){
 			update(heap,g->adj0[j]);
 		}
 	}
 	freeheap(heap);
-	g->core=c;
-}
-
-//Add the special feature to the graph structure: a truncated neighborhood contains only nodes with higher rank
-void mkspecial(sparse *g){
-	unsigned i,j,k;
-	g->d=calloc(g->n,sizeof(unsigned));
-	g->cd=malloc((g->n+1)*sizeof(unsigned));
-	g->adj=malloc((g->e)*sizeof(unsigned));
-	g->cd[0]=0;
-	for (i=0;i<g->n;i++) {
-		g->cd[i+1]=g->cd[i];
-		for (j=g->cd0[i];j<g->cd0[i+1];j++){
-			k=g->adj0[j];
-			if(g->rank[k]>g->rank[i]){
-				g->d[i]++;
-				g->adj[g->cd[i+1]++]=k;
-			}
-		}
-	}
-}
-
-void freesparse(sparse *g){
-	free(g->edges);
 	free(g->d0);
 	free(g->cd0);
 	free(g->adj0);
+	g->core=c;
+	g->n2=n;
+}
+
+void relabelnodes(sparse *g) {
+	unsigned i,j,source,target;
+	j=0;
+	for (i=0;i<g->e;i++) {
+		source=g->rank[g->edges[i].s];
+		target=g->rank[g->edges[i].t];
+		if (source==-1 || target==-1){
+			continue;
+		}
+		if (source<target) {
+			g->edges[j].s=target;
+			g->edges[j++].t=source;
+		}
+		else {
+			g->edges[j].s=source;
+			g->edges[j++].t=target;
+		}
+	}
+	g->e2=j;
+	g->edges=realloc(g->edges,g->e2*sizeof(edge));
+}
+
+//for future use in qsort
+int cmpfunc (const void * a, const void * b){
+	if (*(unsigned*)a>*(unsigned*)b){
+		return 1;
+	}
+	return -1;
+}
+
+
+//Building the special graph structure
+void mkspecial(sparse *g){
+	unsigned i;
+	g->d=calloc(g->n2,sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->d[g->edges[i].s]++;
+	}
+	g->cd=malloc((g->n2+1)*sizeof(unsigned));
+	g->cd[0]=0;
+	for (i=1;i<g->n2+1;i++) {
+		g->cd[i]=g->cd[i-1]+g->d[i-1];
+		g->d[i-1]=0;
+	}
+
+	g->adj=malloc((g->e2)*sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->adj[g->cd[g->edges[i].s] + g->d[ g->edges[i].s ]++ ]=g->edges[i].t;
+	}
+
+	#pragma omp parallel for private(i)
+	for (i=0;i<g->n2;i++) {
+		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
+	}
+
+	//free(g->edges); Can be freed if node parallelisation is used instead of edge
+}
+
+
+void freesparse(sparse *g){
+	free(g->edges);
+	free(g->map);
 	free(g->rank);
 	free(g->d);
 	free(g->cd);
 	free(g->adj);
+	free(g->d0);
+	free(g->cd0);
+	free(g->adj0);
 	free(g);
 }
 
@@ -366,7 +413,7 @@ void onepass(sparse *g,unsigned kmax){
 	#pragma omp parallel
 	{
 		#pragma omp for private(e) schedule(dynamic, 1) nowait
-		for(e=0; e<g->e; e++){
+		for(e=0; e<g->e2; e++){
 			ck_p[0]=g->edges[e].s;
 			ck_p[1]=g->edges[e].t;
 			size_p[0]=merging(&(g->adj[g->cd[ck_p[0]]]),g->d[ck_p[0]],&(g->adj[g->cd[ck_p[1]]]),g->d[ck_p[1]],merge_p);
@@ -374,7 +421,7 @@ void onepass(sparse *g,unsigned kmax){
 		}
 		#pragma omp critical
 		{
-			for (i=0;i<g->n;i++){
+			for (i=0;i<g->n2;i++){
 				nck_1[i]+=nck_p[i];
 				nck_p[i]=0;
 			}
@@ -383,12 +430,12 @@ void onepass(sparse *g,unsigned kmax){
 }
 
 //printing the k-clique degree of each node
-unsigned long long printckdeg(unsigned n, char* ckdeg){
+unsigned long long printckdeg(sparse *g, char* ckdeg){
 	unsigned i;
 	unsigned long long tot=0;
 	FILE* file=fopen(ckdeg,"w");
-	for (i=0;i<n;i++){
-		fprintf(file,"%u %llu\n",i,nck_1[i]);
+	for (i=0;i<g->n2;i++){
+		fprintf(file,"%u %llu\n",g->map[i],nck_1[i]);
 		tot+=nck_1[i];
 	}
 	fclose(file);
@@ -508,12 +555,42 @@ typedef struct {
 	double ckrho;// k-clique density
 } densest;
 
+
+//Building the graph structure
+void mkgraph2(sparse *g){
+	unsigned i;
+	g->d0=calloc(g->n2,sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->d0[g->edges[i].s]++;
+		g->d0[g->edges[i].t]++;
+	}
+	g->cd0=malloc((g->n2+1)*sizeof(unsigned));
+	g->cd0[0]=0;
+	for (i=1;i<g->n2+1;i++) {
+		g->cd0[i]=g->cd0[i-1]+g->d0[i-1];
+		g->d0[i-1]=0;
+	}
+
+	g->adj0=malloc(2*g->e2*sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->adj0[ g->cd0[g->edges[i].s] + g->d0[ g->edges[i].s ]++ ]=g->edges[i].t;
+		g->adj0[ g->cd0[g->edges[i].t] + g->d0[ g->edges[i].t ]++ ]=g->edges[i].s;
+	}
+
+	#pragma omp parallel for private(i)
+	for (i=0;i<g->n2;i++) {
+		qsort(&g->adj0[g->cd0[i]],g->d0[i],sizeof(unsigned),cmpfunc);
+	}
+}
+
 //one pass over all k-cliques
 void oneshortpass(sparse *g, bheapLLU* heap, unsigned kmax, unsigned u){
 	unsigned i,j,v,s=0;
 	static unsigned *adj=NULL;
 	if (adj==NULL){
-		adj=malloc(g->n*sizeof(unsigned));
+		adj=malloc(g->n2*sizeof(unsigned));
 	}
 
 	for (i=g->cd0[u];i<g->cd0[u+1];i++){
@@ -549,19 +626,19 @@ densest* kcliquecore(unsigned kmax, unsigned long long ncktot, sparse* g){
 	unsigned i,j,u,v;
 	keyvalueLLU kv;
 	unsigned long long c=0;//the k-clique core number
-	bheapLLU* heap=mkheapLLU(nck_1,g->n);
-	unsigned e=g->e; //number of edges left
+	bheapLLU* heap=mkheapLLU(nck_1,g->n2);
+	unsigned e=g->e2; //number of edges left
 	densest* ds=malloc(sizeof(densest));
-	ds->ic=calloc(g->n,sizeof(keyvalueLLU));
-	ds->n=g->n;
+	ds->ic=calloc(g->n2,sizeof(keyvalueLLU));
+	ds->n=g->n2;
 	double ckrho_tmp;
 	unsigned size_tmp;
 	unsigned long long ncktot2;
 
-	ds->ckrho=((double)ncktot)/((double)g->n);
-	ds->size=g->n;
-	ds->rho=((double)(2*e))/((double)(g->n*(g->n-1)));
-	for (i=0;i<g->n-1;i++){
+	ds->ckrho=((double)ncktot)/((double)g->n2);
+	ds->size=g->n2;
+	ds->rho=((double)(2*e))/((double)(g->n2*(g->n2-1)));
+	for (i=0;i<g->n2-1;i++){
 		kv=popminLLU(heap);
 		u=kv.key;
 		if (kv.value>c){
@@ -581,7 +658,7 @@ densest* kcliquecore(unsigned kmax, unsigned long long ncktot, sparse* g){
 			}
 		}
 		ncktot-=ncktot2/((unsigned long long)(kmax-1));//kcliques are counted kmax-1 times
-		size_tmp=g->n-i-1;
+		size_tmp=g->n2-i-1;
 		ckrho_tmp=((double)ncktot)/((double)size_tmp);
 		if (ckrho_tmp>ds->ckrho){
 			ds->ckrho=ckrho_tmp;
@@ -597,20 +674,20 @@ densest* kcliquecore(unsigned kmax, unsigned long long ncktot, sparse* g){
 	return ds;
 }
 
-void printdensest(densest *ds, char* ckcore, char* ckdens){
+void printdensest(densest *ds, sparse *g, char* ckcore, char* ckdens){
 	FILE *file;
 	unsigned i;
 
 	file=fopen(ckcore,"w");
 	for(i=0;i<ds->n;i++){
-		fprintf(file,"%u %llu\n",ds->ic[i].key,ds->ic[i].value);
+		fprintf(file,"%u %llu\n",g->map[ds->ic[i].key],ds->ic[i].value);
 	}
 	fclose(file);
 
 	file=fopen(ckdens,"w");
 	fprintf(file,"%lf %lf %u",ds->ckrho,ds->rho,ds->size);
 	for(i=ds->n-1;i>ds->n-ds->size-1;i--){
-		fprintf(file," %u",ds->ic[i].key);
+		fprintf(file," %u",g->map[ds->ic[i].key]);
 	}
 	fprintf(file,"\n");
 	fclose(file);
@@ -622,24 +699,43 @@ int main(int argc,char** argv){
 	unsigned long long tot;
 	densest *ds;
   omp_set_num_threads(atoi(argv[1]));
+	time_t t0,t1,t2;
+	t1=time(NULL);
+	t0=t1;
 
-	printf("Reading edgelist from file: %s\n",argv[3]);
+	printf("Reading edgelist from file %s\n",argv[3]);
 	g=readedgelist(argv[3]);
-	printf("Number of nodes = %u\n",g->n);
-	printf("Number of edges = %u\n",g->e);
+
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+
+	printf("Number of nodes: %u\n",g->n);
+	printf("Number of edges: %u\n",g->e);
 	printf("Building the graph structure\n");
 	mkgraph(g);
 	printf("Computing degeneracy ordering\n");
-	kcore(g);
+	kcore(g,kmax);
+	relabelnodes(g);
+	printf("Number of nodes (with core value > %u): %u\n",kmax-2,g->n2);
+	printf("Number of edges (between nodes with core value > %u): %u\n",kmax-2,g->e2);
 	printf("Core number = %u\n",g->core);
 	mkspecial(g);
   allocglobal(g,kmax);
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
 	printf("Computing the %u-clique degree of each node\n",kmax);
 	onepass(g,kmax);
 	printf("Writing %u-cliques degree of each node in file: %s\n",kmax, argv[4]);
-	tot=printckdeg(g->n,argv[4]);
-	tot/=(unsigned long long)kmax;
+	tot=printckdeg(g,argv[4]);
+	tot/=kmax;
 	printf("Number of %u-cliques: %llu\n",kmax,tot);
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+	printf("Computing the %u-clique core decomposition\n",kmax);
+	mkgraph2(g);
 	ds=kcliquecore(kmax,tot,g);
 	printf("%u-clique core number of the graph = %llu\n",kmax,ds->ckcore);
 	printf("%u-clique density of the dense subgraph = %lf\n",kmax,ds->ckrho);
@@ -647,7 +743,13 @@ int main(int argc,char** argv){
 	printf("Size of the found dense subgraph = %u\n",ds->size);
 	printf("Writing %u-clique core number of each node in file: %s\n",kmax, argv[5]);
 	printf("Writing the found dense subgraph in file: %s\n", argv[6]);
-	printdensest(ds,argv[5],argv[6]);
+	printdensest(ds,g,argv[5],argv[6]);
 	freesparse(g);
+	t2=time(NULL);
+	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	t1=t2;
+
+	printf("- Overall time = %ldh%ldm%lds\n",(t2-t0)/3600,((t2-t0)%3600)/60,((t2-t0)%60));
+
 	return 0;
 }

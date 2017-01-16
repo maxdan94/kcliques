@@ -8,7 +8,7 @@ Info:
 Feel free to use these lines as you wish. This program list all k-cliques and write them in a file.
 
 To compile:
-"gcc ck_list.c -O9 -o ck_list".
+"gcc cklist.c -O9 -o cklist".
 
 To execute:
 "./ck_list k edgelist.txt kcliques.txt".
@@ -120,21 +120,25 @@ typedef struct {
 } edge;
 
 typedef struct {
+	//edge list structure:
 	unsigned n; //number of nodes
 	unsigned e; //number of edges
+	unsigned n2; //number of nodes with core value larger than one
+	unsigned e2; //number of edges between nodes with core value larger than one
 	edge *edges;//list of edges
 
+	//to compute a degeneracy ordering:
 	unsigned *d0; //degrees
 	unsigned *cd0; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj0; //list of neighbors
-
 	unsigned *rank; //degeneracy rankings of nodes
+	unsigned *map;//map[newlabel]=oldlabel
+	unsigned core; //core number of the graph
 
+	//truncated neighborhoods:
 	unsigned *d; //truncated degrees
 	unsigned *cd; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj; //list of neighbors with higher rank
-
-	unsigned core; //core number of the graph
 } sparse;
 
 
@@ -169,13 +173,6 @@ sparse* readedgelist(char* edgelist){
 	return g;
 }
 
-//for future use in qsort
-int cmpfunc (const void * a, const void * b){
-	if (*(unsigned*)a>*(unsigned*)b){
-		return 1;
-	}
-	return -1;
-}
 
 //Building the graph structure
 void mkgraph(sparse *g){
@@ -222,55 +219,101 @@ void freeheap(bheap *heap){
 }
 
 //computing degeneracy ordering and core value
-void kcore(sparse* g){
-	unsigned i,j;
+void kcore(sparse* g,unsigned kmax){
+	unsigned i,j,r=0,n=g->n,k=kmax-1;
 	keyvalue kv;
 	unsigned c=0;//the core number
 	bheap *heap=mkheap(g);
 	g->rank=malloc(g->n*sizeof(unsigned));
-
+	g->map=malloc(g->n*sizeof(unsigned));
 	for (i=0;i<g->n;i++){
 		kv=popmin(heap);
-		g->rank[kv.key]=i;
 		if (kv.value>c){
 			c=kv.value;
+		}
+		if (c<k){
+			g->rank[kv.key]=-1;
+			n--;
+		}
+		else{
+			g->map[n-r]=kv.key;
+			g->rank[kv.key]=n-(++r);
 		}
 		for (j=g->cd0[kv.key];j<g->cd0[kv.key+1];j++){
 			update(heap,g->adj0[j]);
 		}
 	}
 	freeheap(heap);
-	g->core=c;
-}
-
-//Add the special feature to the graph structure: a truncated neighborhood contains only nodes with higher rank
-void mkspecial(sparse *g){
-	unsigned i,j,k;
-	g->d=calloc(g->n,sizeof(unsigned));
-	g->cd=malloc((g->n+1)*sizeof(unsigned));
-	g->adj=malloc((g->e)*sizeof(unsigned));
-	g->cd[0]=0;
-	for (i=0;i<g->n;i++) {
-		g->cd[i+1]=g->cd[i];
-		for (j=g->cd0[i];j<g->cd0[i+1];j++){
-			k=g->adj0[j];
-			if(g->rank[k]>g->rank[i]){
-				g->d[i]++;
-				g->adj[g->cd[i+1]++]=k;
-			}
-		}
-	}
-	for (i=0;i<g->n;i++) {
-		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
-	}
 	free(g->d0);
 	free(g->cd0);
 	free(g->adj0);
+	g->core=c;
+	g->n2=n;
+}
+
+void relabelnodes(sparse *g) {
+	unsigned i,j,source,target;
+	j=0;
+	for (i=0;i<g->e;i++) {
+		source=g->rank[g->edges[i].s];
+		target=g->rank[g->edges[i].t];
+		if (source==-1 || target==-1){
+			continue;
+		}
+		if (source<target) {
+			g->edges[j].s=target;
+			g->edges[j++].t=source;
+		}
+		else {
+			g->edges[j].s=source;
+			g->edges[j++].t=target;
+		}
+	}
+	g->e2=j;
+	g->edges=realloc(g->edges,g->e2*sizeof(edge));
+}
+
+//for future use in qsort
+int cmpfunc (const void * a, const void * b){
+	if (*(unsigned*)a>*(unsigned*)b){
+		return 1;
+	}
+	return -1;
+}
+
+//Building the special graph structure
+void mkspecial(sparse *g){
+	unsigned i;
+	g->d=calloc(g->n2,sizeof(unsigned));
+	for (i=0;i<g->e2;i++) {
+		g->d[g->edges[i].s]++;
+	}
+
+	g->cd=malloc((g->n2+1)*sizeof(unsigned));
+
+	g->cd[0]=0;
+	for (i=1;i<g->n2+1;i++) {
+		g->cd[i]=g->cd[i-1]+g->d[i-1];
+		g->d[i-1]=0;
+	}
+
+	g->adj=malloc((g->e2)*sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->adj[g->cd[g->edges[i].s] + g->d[ g->edges[i].s ]++ ]=g->edges[i].t;
+	}
+
+	for (i=0;i<g->n2;i++) {
+		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
+	}
+
+	//free(g->edges); Can be freed if node parallelisation is used instead of edge
 }
 
 void freesparse(sparse *g){
 	free(g->edges);
 	free(g->rank);
+	free(g->map);
 	free(g->d);
 	free(g->cd);
 	free(g->adj);
@@ -309,15 +352,15 @@ void recursion(unsigned kmax, unsigned k, sparse* g, unsigned* ck, unsigned* mer
 	if (k==kmax){//print the k-clique
 		for (i=0;i<size[k-3];i++){
 			for (j=0;j<kmax-1;j++){
-				fprintf(file,"%u ",ck[j]);
+				fprintf(file,"%u ",g->map[ck[j]]);
 			}
-			fprintf(file,"%u\n",merge[t+i]);
+			fprintf(file,"%u\n",g->map[merge[t+i]]);
 		}
-		(*nck)+=(unsigned long long)size[k-3];
+		(*nck)+=size[k-3];
 		return;
 	}
 
-	for(i=0; i<size[k-3]; i++){
+	for(i=1; i<size[k-3]; i++){//Astuce: when i=0; no adjacent node in merge;
 		ck[k-1]=merge[t+i];
 		size[k-2]=merging(&g->adj[g->cd[ck[k-1]]],g->d[ck[k-1]],&merge[t],size[k-3],&merge[t2]);
 		recursion(kmax, k+1, g, ck, merge, size, nck, file);
@@ -326,7 +369,7 @@ void recursion(unsigned kmax, unsigned k, sparse* g, unsigned* ck, unsigned* mer
 
 //one pass over all k-cliques
 unsigned long long onepass(sparse *g,unsigned kmax,FILE* file){
-	unsigned e,u,v,k;
+	unsigned i,u,v;
 	unsigned *merge,*size,*ck;
 	unsigned long long nck=0;
 
@@ -334,11 +377,13 @@ unsigned long long onepass(sparse *g,unsigned kmax,FILE* file){
 		merge=malloc((kmax-2)*g->core*sizeof(unsigned));
 		size=malloc((kmax-2)*sizeof(unsigned));
 		ck=malloc(kmax*sizeof(unsigned));
-		for(e=0; e<g->e; e++){
-			ck[0]=g->edges[e].s;
-			ck[1]=g->edges[e].t;
-			size[0]=merging(&(g->adj[g->cd[ck[0]]]),g->d[ck[0]],&(g->adj[g->cd[ck[1]]]),g->d[ck[1]],merge);
-			recursion(kmax,3,g,ck,merge,size,&nck,file);
+		for(u=0; u<g->n2; u++){
+			ck[0]=u;
+			for (i=g->cd[u];i<g->cd[u+1];i++){
+				ck[1]=g->adj[i];
+				size[0]=merging(&(g->adj[g->cd[ck[0]]]),g->d[ck[0]],&(g->adj[g->cd[ck[1]]]),g->d[ck[1]],merge);
+				recursion(kmax,3,g,ck,merge,size,&nck,file);
+			}
 		}
 		free(merge);
 		free(size);
@@ -365,12 +410,15 @@ int main(int argc,char** argv){
 	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
 	t1=t2;
 
-	printf("Number of nodes = %u\n",g->n);
-	printf("Number of edges = %u\n",g->e);
+	printf("Number of nodes: %u\n",g->n);
+	printf("Number of edges: %u\n",g->e);
 	printf("Building the graph structure\n");
 	mkgraph(g);
 	printf("Computing degeneracy ordering\n");
-	kcore(g);
+	kcore(g,kmax);
+	relabelnodes(g);
+	printf("Number of nodes (with core value > %u): %u\n",kmax-2,g->n2);
+	printf("Number of edges (between nodes with core value > %u): %u\n",kmax-2,g->e2);
 	printf("Core number = %u\n",g->core);
 	mkspecial(g);
 

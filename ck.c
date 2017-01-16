@@ -174,17 +174,6 @@ sparse* readedgelist(char* edgelist){
 	return g;
 }
 
-typedef struct {
-	unsigned node;
-	unsigned deg;
-} nodedeg ;
-
-//For futur use in qsort.
-int compare_nodedeg(void const *a, void const *b){
-	nodedeg const *pa = a;
-	nodedeg const *pb = b;
-	return (pa->deg < pb->deg) ? 1 : -1;
-}
 
 //Building the graph structure
 void mkgraph(sparse *g){
@@ -239,15 +228,15 @@ void kcore(sparse* g){
 	g->rank=malloc(g->n*sizeof(unsigned));
 	for (i=0;i<g->n;i++){
 		kv=popmin(heap);
+		if (kv.value>c){
+			c=kv.value;
+		}
 		if (c<2){
 			g->rank[kv.key]=-1;
 			n--;
 		}
 		else{
-			g->rank[kv.key]=n-r++;
-		}
-		if (kv.value>c){
-			c=kv.value;
+			g->rank[kv.key]=n-(++r);
 		}
 		for (j=g->cd0[kv.key];j<g->cd0[kv.key+1];j++){
 			update(heap,g->adj0[j]);

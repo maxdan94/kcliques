@@ -122,21 +122,24 @@ typedef struct {
 } edge;
 
 typedef struct {
+	//edge list structure:
 	unsigned n; //number of nodes
 	unsigned e; //number of edges
+	unsigned n2; //number of nodes with core value larger than one
+	unsigned e2; //number of edges between nodes with core value larger than one
 	edge *edges;//list of edges
 
+	//to compute a degeneracy ordering:
 	unsigned *d0; //degrees
 	unsigned *cd0; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj0; //list of neighbors
-
 	unsigned *rank; //degeneracy rankings of nodes
+	unsigned core; //core number of the graph
 
+	//truncated neighborhoods:
 	unsigned *d; //truncated degrees
 	unsigned *cd; //cumulative degree: (start with 0) length=dim+1
 	unsigned *adj; //list of neighbors with higher rank
-
-	unsigned core; //core number of the graph
 } sparse;
 
 
@@ -171,12 +174,16 @@ sparse* readedgelist(char* edgelist){
 	return g;
 }
 
-//for future use in qsort
-int cmpfunc (const void * a, const void * b){
-	if (*(unsigned*)a>*(unsigned*)b){
-		return 1;
-	}
-	return -1;
+typedef struct {
+	unsigned node;
+	unsigned deg;
+} nodedeg ;
+
+//For futur use in qsort.
+int compare_nodedeg(void const *a, void const *b){
+	nodedeg const *pa = a;
+	nodedeg const *pb = b;
+	return (pa->deg < pb->deg) ? 1 : -1;
 }
 
 //Building the graph structure
@@ -225,15 +232,20 @@ void freeheap(bheap *heap){
 
 //computing degeneracy ordering and core value
 void kcore(sparse* g){
-	unsigned i,j;
+	unsigned i,j,r=0,n=g->n;
 	keyvalue kv;
 	unsigned c=0;//the core number
 	bheap *heap=mkheap(g);
 	g->rank=malloc(g->n*sizeof(unsigned));
-
 	for (i=0;i<g->n;i++){
 		kv=popmin(heap);
-		g->rank[kv.key]=i;
+		if (c<2){
+			g->rank[kv.key]=-1;
+			n--;
+		}
+		else{
+			g->rank[kv.key]=n-r++;
+		}
 		if (kv.value>c){
 			c=kv.value;
 		}
@@ -242,33 +254,70 @@ void kcore(sparse* g){
 		}
 	}
 	freeheap(heap);
-	g->core=c;
-}
-
-//Add the special feature to the graph structure: a truncated neighborhood contains only nodes with higher rank
-void mkspecial(sparse *g){
-	unsigned i,j,k;
-	g->d=calloc(g->n,sizeof(unsigned));
-	g->cd=malloc((g->n+1)*sizeof(unsigned));
-	g->adj=malloc((g->e)*sizeof(unsigned));
-	g->cd[0]=0;
-	for (i=0;i<g->n;i++) {
-		g->cd[i+1]=g->cd[i];
-		for (j=g->cd0[i];j<g->cd0[i+1];j++){
-			k=g->adj0[j];
-			if(g->rank[k]>g->rank[i]){
-				g->d[i]++;
-				g->adj[g->cd[i+1]++]=k;
-			}
-		}
-	}
-	#pragma omp parallel for schedule(dynamic, 1) private(i)
-	for (i=0;i<g->n;i++) {
-		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
-	}
 	free(g->d0);
 	free(g->cd0);
 	free(g->adj0);
+	g->core=c;
+	g->n2=n;
+}
+
+void relabelnodes(sparse *g) {
+	unsigned i,j,source,target;
+	j=0;
+	for (i=0;i<g->e;i++) {
+		source=g->rank[g->edges[i].s];
+		target=g->rank[g->edges[i].t];
+		if (source==-1 || target==-1){
+			continue;
+		}
+		if (source<target) {
+			g->edges[j].s=target;
+			g->edges[j++].t=source;
+		}
+		else {
+			g->edges[j].s=source;
+			g->edges[j++].t=target;
+		}
+	}
+	g->e2=j;
+	g->edges=realloc(g->edges,g->e2*sizeof(edge));
+}
+
+//for future use in qsort
+int cmpfunc (const void * a, const void * b){
+	if (*(unsigned*)a>*(unsigned*)b){
+		return 1;
+	}
+	return -1;
+}
+
+//Building the special graph structure
+void mkspecial(sparse *g){
+	unsigned i;
+	g->d=calloc(g->n2,sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->d[g->edges[i].s]++;
+	}
+	g->cd=malloc((g->n2+1)*sizeof(unsigned));
+	g->cd[0]=0;
+	for (i=1;i<g->n2+1;i++) {
+		g->cd[i]=g->cd[i-1]+g->d[i-1];
+		g->d[i-1]=0;
+	}
+
+	g->adj=malloc((g->e2)*sizeof(unsigned));
+
+	for (i=0;i<g->e2;i++) {
+		g->adj[g->cd[g->edges[i].s] + g->d[ g->edges[i].s ]++ ]=g->edges[i].t;
+	}
+
+	#pragma omp parallel for private(i)
+	for (i=0;i<g->n2;i++) {
+		qsort(&g->adj[g->cd[i]],g->d[i],sizeof(unsigned),cmpfunc);
+	}
+
+	//free(g->edges); Can be freed if node parallelisation is used instead of edge
 }
 
 void freesparse(sparse *g){
@@ -281,21 +330,41 @@ void freesparse(sparse *g){
 }
 
 //store the intersection of list1 and list2 in list3 and return the size of list3 (the 3 lists are sorted)
-inline unsigned merging(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2,unsigned *list3){
+unsigned merging(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2,unsigned *list3){
 	unsigned i=0,j=0,s3=0;
 	unsigned x=list1[0],y=list2[0];
 	while (i<s1 && j<s2){
 		if(x<y){
 			x=list1[++i];
-			continue;
 		}
-		if(y<x){
+		else if(y<x){
 			y=list2[++j];
-			continue;
 		}
-		list3[s3++]=x;
-		x=list1[++i];
-		y=list2[++j];
+		else{
+			list3[s3++]=y;
+			x=list1[++i];
+			y=list2[++j];
+		}
+	}
+	return s3;
+}
+
+//return the size of the intersection of list1 and list2
+inline unsigned merging2(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2){
+	unsigned i=0,j=0,s3=0;
+	unsigned x=list1[0],y=list2[0];
+	while (i<s1 && j<s2){
+		if(x<y){
+			x=list1[++i];
+		}
+		else if(y<x){
+			y=list2[++j];
+		}
+		else{
+			s3++;
+			x=list1[++i];
+			y=list2[++j];
+		}
 	}
 	return s3;
 }
@@ -309,12 +378,22 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 		return;
 	}
 
-	for(i=0; i<size[k-3]; i++){
+	if (k==kmax-1){
+		for(i=1; i<size[k-3]; i++){//Astuce: when i=0; no adjacent node in merge;
+			u=merge[t+i];
+			size[k-2]=merging2(&g->adj[g->cd[u]],g->d[u],&merge[t],size[k-3]);
+			nck[k]+=size[k-2];
+		}
+		return;
+	}
+
+	for(i=2; i<size[k-3]; i++){//Astuce: when i=0 or 1; no adjacent node in merge;
 		u=merge[t+i];
 		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],size[k-3],&merge[t2]);
-		nck[k]+=(unsigned long long)size[k-2];
+		nck[k]+=size[k-2];
 		recursion(kmax, k+1, merge, size, g, nck);
 	}
+
 }
 
 //one pass over all k-cliques
@@ -334,7 +413,7 @@ unsigned long long *onepass(sparse *g,unsigned kmax){
 			nck_p=calloc(kmax,sizeof(unsigned long long));
 
 			#pragma omp for schedule(dynamic, 1) nowait
-			for(e=0; e<g->e; e++){
+			for(e=0; e<g->e2; e++){
 				u=g->edges[e].s;
 				v=g->edges[e].t;
 				size[0]=merging(&(g->adj[g->cd[u]]),g->d[u],&(g->adj[g->cd[v]]),g->d[v],merge);
@@ -374,12 +453,15 @@ int main(int argc,char** argv){
 	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
 	t1=t2;
 
-	printf("Number of nodes = %u\n",g->n);
-	printf("Number of edges = %u\n",g->e);
+	printf("Number of nodes: %u\n",g->n);
+	printf("Number of edges: %u\n",g->e);
 	printf("Building the graph structure\n");
 	mkgraph(g);
 	printf("Computing degeneracy ordering\n");
 	kcore(g);
+	relabelnodes(g);
+	printf("Number of nodes (with core value > 1): %u\n",g->n2);
+	printf("Number of edges (between nodes with core value > 1): %u\n",g->e2);
 	printf("Core number = %u\n",g->core);
 	mkspecial(g);
 

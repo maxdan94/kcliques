@@ -28,6 +28,7 @@ parallelisation over edges and increasing core ordering
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
 
+#define PAD sizeof(int)*16 //use a padding space of 64 bytes after private heap arrays in order to avoid false sharing among threads.
 
 // heap data structure :
 
@@ -397,9 +398,9 @@ unsigned long long *onepass(sparse *g,unsigned kmax){
 
 		#pragma omp parallel private(merge,size,nck_p,e,u,v,k)
 		{
-			merge=malloc((kmax-2)*g->core*sizeof(unsigned));
-			size=malloc((kmax-2)*sizeof(unsigned));
-			nck_p=calloc(kmax,sizeof(unsigned long long));
+			merge=malloc((kmax-2)*g->core*sizeof(unsigned)+PAD);
+			size=malloc((kmax-2)*sizeof(unsigned)+PAD);
+			nck_p=calloc(kmax,sizeof(unsigned long long)+PAD);
 
 			#pragma omp for schedule(dynamic, 1) nowait
 			for(e=0; e<g->e2; e++){

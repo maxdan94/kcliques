@@ -371,7 +371,7 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 	if (k==kmax-1){
 		for(i=1; i<size[k-3]; i++){//Astuce: when i=0; no adjacent node in merge;
 			u=merge[t+i];
-			size[k-2]=merging2(&g->adj[g->cd[u]],g->d[u],&merge[t],size[k-3]);
+			size[k-2]=merging2(&g->adj[g->cd[u]],g->d[u],&merge[t],t+i+1);
 			nck[k]+=size[k-2];
 		}
 		return;
@@ -379,7 +379,7 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 
 	for(i=1; i<size[k-3]; i++){
 		u=merge[t+i];
-		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],size[k-3],&merge[t2]);
+		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],t+i+1,&merge[t2]);
 		nck[k]+=size[k-2];
 		recursion(kmax, k+1, merge, size, g, nck);
 	}

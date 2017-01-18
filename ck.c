@@ -295,7 +295,6 @@ void mkspecial(sparse *g){
 		g->cd[i]=g->cd[i-1]+g->d[i-1];
 		g->d[i-1]=0;
 	}
-
 	g->adj=malloc((g->e2)*sizeof(unsigned));
 
 	for (i=0;i<g->e2;i++) {
@@ -320,7 +319,7 @@ void freesparse(sparse *g){
 }
 
 //store the intersection of list1 and list2 in list3 and return the size of list3 (the 3 lists are sorted)
-unsigned merging(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2,unsigned *list3){
+inline unsigned merging(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2,unsigned *list3){
 	unsigned i=0,j=0,s3=0;
 	unsigned x=list1[0],y=list2[0];
 	while (i<s1 && j<s2){
@@ -331,9 +330,9 @@ unsigned merging(unsigned *list1, unsigned s1, unsigned *list2, unsigned s2,unsi
 			y=list2[++j];
 		}
 		else{
-			list3[s3++]=y;
-			x=list1[++i];
+			list3[s3++]=x;
 			y=list2[++j];
+			x=list1[++i];
 		}
 	}
 	return s3;
@@ -352,8 +351,8 @@ inline unsigned merging2(unsigned *list1, unsigned s1, unsigned *list2, unsigned
 		}
 		else{
 			s3++;
-			x=list1[++i];
 			y=list2[++j];
+			x=list1[++i];
 		}
 	}
 	return s3;
@@ -364,14 +363,10 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 	unsigned t=(k-3)*g->core,t2=t+g->core;
 	unsigned i, u;
 
-	if (k==kmax){
-		return;
-	}
-
 	if (k==kmax-1){
 		for(i=1; i<size[k-3]; i++){//Astuce: when i=0; no adjacent node in merge;
 			u=merge[t+i];
-			size[k-2]=merging2(&g->adj[g->cd[u]],g->d[u],&merge[t],t+i+1);
+			size[k-2]=merging2(&merge[t],i,&g->adj[g->cd[u]],g->d[u]);
 			nck[k]+=size[k-2];
 		}
 		return;
@@ -379,7 +374,7 @@ void recursion(unsigned kmax, unsigned k, unsigned* merge, unsigned* size, spars
 
 	for(i=1; i<size[k-3]; i++){
 		u=merge[t+i];
-		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],t+i+1,&merge[t2]);
+		size[k-2]=merging(&g->adj[g->cd[u]],g->d[u],&merge[t],i,&merge[t2]);
 		nck[k]+=size[k-2];
 		recursion(kmax, k+1, merge, size, g, nck);
 	}
@@ -398,20 +393,32 @@ unsigned long long *onepass(sparse *g,unsigned kmax){
 
 		#pragma omp parallel private(merge,size,nck_p,e,u,v,k)
 		{
-			merge=malloc((kmax-2)*g->core*sizeof(unsigned)+PAD);
 			size=malloc((kmax-2)*sizeof(unsigned)+PAD);
 			nck_p=calloc(kmax,sizeof(unsigned long long)+PAD);
 
-			#pragma omp for schedule(dynamic, 1) nowait
-			for(e=0; e<g->e2; e++){
-				u=g->edges[e].s;
-				v=g->edges[e].t;
-				size[0]=merging(&(g->adj[g->cd[u]]),g->d[u],&(g->adj[g->cd[v]]),g->d[v],merge);
-				nck_p[2]+=(unsigned long long)size[0];
-				recursion(kmax,3,merge,size,g,nck_p);
+			if (kmax==3){
+				#pragma omp for schedule(dynamic, 1) nowait
+				for(e=0; e<g->e2; e++){
+					u=g->edges[e].s;
+					v=g->edges[e].t;
+					size[0]=merging2(&(g->adj[g->cd[u]]),g->d[u],&(g->adj[g->cd[v]]),g->d[v]);
+					nck_p[2]+=size[0];
+				}
 			}
 
-			free(merge);
+			else{
+				merge=malloc((kmax-2)*g->core*sizeof(unsigned)+PAD);
+				#pragma omp for schedule(dynamic, 1) nowait
+				for(e=0; e<g->e2; e++){
+					u=g->edges[e].s;
+					v=g->edges[e].t;
+					size[0]=merging(&(g->adj[g->cd[u]]),g->d[u],&(g->adj[g->cd[v]]),g->d[v],merge);
+					nck_p[2]+=size[0];
+					recursion(kmax,3,merge,size,g,nck_p);
+				}
+				free(merge);
+			}
+
 			free(size);
 			#pragma omp critical
 			{
@@ -428,7 +435,7 @@ unsigned long long *onepass(sparse *g,unsigned kmax){
 
 int main(int argc,char** argv){
 	sparse* g;
-	unsigned i,	kmax=atoi(argv[2]);
+	unsigned i, kmax=atoi(argv[2]);
 	unsigned long long *nck;
 	omp_set_num_threads(atoi(argv[1]));
 

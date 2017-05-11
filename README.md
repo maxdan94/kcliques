@@ -1,6 +1,6 @@
 # README #
 
-##Info##
+## Info ##
 
 - ck.c counts all k-cliques in parallel.  
 - cklist.c lists all k-cliques and write them in a file, note that the number of k-cliques can be extremly large and thus it can use a lot of disk storage.  
@@ -12,7 +12,7 @@ For instance:
 - Friendster (http://snap.stanford.edu/data/com-Friendster.html) has exactly 487,090,833,092,739 10-cliques, that is a bit less than 0.5 quadrillions 10-cliques. 
 - Twitter (https://an.kaist.ac.kr/traces/WWW2010.html) has exactly 3,388,795,307,518,264 5-cliques, that is a bit more than 3 quadrillions 5-cliques.
 
-##To compile##
+## To compile ##
 
 gcc ck.c -O3 -o ck -fopenmp  
 gcc cklist.c -O3 -o cklist  
@@ -20,7 +20,7 @@ gcc ckdeg.c -O3 -o ckdeg -fopenmp
 gcc ckcore.c -O3 -o ckcore  
 gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 
-##To execute##
+## To execute ##
 
 ./ck p k edgelist.txt
 
@@ -58,7 +58,7 @@ gcc ckcorepar.c -O3 -o ckcorepar -fopenmp
 - Will write in ckcore.txt the ID of each node followed by its k-clique core number in a k-clique core ordering
 - Will write in ckdens.txt the the k-clique density, the edge density and the size of the densest subgraph followed by the ID of each node in it
 
-##Initial contributors##
+## Initial contributors ##
 
 Maximilien Danisch, Qinna Wang, Oana Balalau and Mauro Sozio  
 January 2016  

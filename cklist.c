@@ -160,7 +160,7 @@ sparse* readedgelist(char* edgelist){
 	g->edges=malloc(e1*sizeof(edge));
 	while (fscanf(file,"%u %u", &(g->edges[g->e].s), &(g->edges[g->e].t))==2) {
 		g->n=max3(g->n,g->edges[g->e].s,g->edges[g->e].t);
-		if (g->e++==e1) {
+		if (++(g->e)==e1) {
 			e1+=NLINKS;
 			g->edges=realloc(g->edges,e1*sizeof(edge));
 		}

@@ -11,7 +11,7 @@ To compile:
 "gcc cklist.c -O9 -o cklist".
 
 To execute:
-"./ck_list k edgelist.txt kcliques.txt".
+"./cklist k edgelist.txt kcliques.txt".
 "k" of k-clique to enumerate.
 "edgelist.txt" should contain the graph: one edge on each line (2 unsigned ints separated by a space).
 "kcliques.txt" will contain the kcliques, on clique on each line (k unsigned ints)
@@ -345,10 +345,6 @@ void recursion(unsigned kmax, unsigned k, sparse* g, unsigned* ck, unsigned* mer
 	unsigned t=(k-3)*g->core,t2=t+g->core;
 	unsigned i, j, u;
 
-	if (size[k-3]<kmax-k){//stop if we already know k-cliques cannot be formed
-		return;
-	}
-
 	if (k==kmax){//print the k-clique
 		for (i=0;i<size[k-3];i++){
 			for (j=0;j<kmax-1;j++){
@@ -360,7 +356,7 @@ void recursion(unsigned kmax, unsigned k, sparse* g, unsigned* ck, unsigned* mer
 		return;
 	}
 
-	for(i=1; i<size[k-3]; i++){//Astuce: when i=0; no adjacent node in merge;
+	for(i=kmax-k; i<size[k-3]; i++){//Astuce: when i<kmax-k; not enough adjacent nodes in merge;
 		ck[k-1]=merge[t+i];
 		size[k-2]=merging(&g->adj[g->cd[ck[k-1]]],g->d[ck[k-1]],&merge[t],size[k-3],&merge[t2]);
 		recursion(kmax, k+1, g, ck, merge, size, nck, file);
